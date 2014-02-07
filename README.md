@@ -14,3 +14,5 @@ Feature Highlights:
 To download a pre-built VM appliance, access documentation, and sign up for the mailing list, go to:
 
   http://www.projectfloodlight.org/floodlight
+
+This is an modified version of original floodlight. It is capable of load static topology and resolve ARP request for the static toplogy. 
