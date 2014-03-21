@@ -148,6 +148,8 @@ public class Forwarding extends ForwardingBase implements IFloodlightModule {
           .setActions(actions)
           .setLengthU(OFFlowMod.MINIMUM_LENGTH); // +OFActionOutput.MINIMUM_LENGTH);
 
+	fm.setFlags(OFFlowMod.OFPFF_SEND_FLOW_REM);
+
         try {
             if (log.isDebugEnabled()) {
                 log.debug("write drop flow-mod sw={} match={} flow-mod={}",
@@ -287,11 +289,16 @@ public class Forwarding extends ForwardingBase implements IFloodlightModule {
                                         .getAttribute(IOFSwitch.PROP_FASTWILDCARDS))
                                         .intValue()
                                         & ~OFMatch.OFPFW_IN_PORT
+					& ~OFMatch.OFPFW_DL_TYPE
                                         & ~OFMatch.OFPFW_DL_VLAN
                                         & ~OFMatch.OFPFW_DL_SRC
                                         & ~OFMatch.OFPFW_DL_DST
                                         & ~OFMatch.OFPFW_NW_SRC_MASK
-                                        & ~OFMatch.OFPFW_NW_DST_MASK;
+                                        & ~OFMatch.OFPFW_NW_DST_MASK
+                                        & ~OFMatch.OFPFW_NW_PROTO
+                                        & ~OFMatch.OFPFW_NW_SRC_ALL
+                                        & ~OFMatch.OFPFW_NW_DST_ALL;
+
                             }
                             log.debug("Arup: push routing");
                             pushRoute(route, match, wildcard_hints, pi, sw.getId(), cookie, 
@@ -426,6 +433,35 @@ public class Forwarding extends ForwardingBase implements IFloodlightModule {
         this.routingEngine = context.getServiceImpl(IRoutingService.class);
         this.topology = context.getServiceImpl(ITopologyService.class);
         this.counterStore = context.getServiceImpl(ICounterStoreService.class);
+         // read our config options
+         Map<String, String> configOptions = context.getConfigParams(this);
+         try
+	 {
+             String idleTimeout = configOptions.get("idletimeout");
+             if (idleTimeout != null) {
+                 FLOWMOD_DEFAULT_IDLE_TIMEOUT = Short.parseShort(idleTimeout);
+             }
+         }
+	 catch (NumberFormatException e) 
+	 {
+             log.warn("Error parsing flow idle timeout, " +
+             		 "using default of {} seconds",
+                      FLOWMOD_DEFAULT_IDLE_TIMEOUT);
+         }
+
+	try
+	{
+	        String hardTimeout = configOptions.get("hardtimeout");
+        	if (hardTimeout != null){
+	                FLOWMOD_DEFAULT_HARD_TIMEOUT = Short.parseShort(hardTimeout);
+        	}
+	}
+	catch (NumberFormatException e)
+	{
+             log.warn("Error parsing flow hard timeout, " +
+             		 "using default of {} seconds",
+                      FLOWMOD_DEFAULT_HARD_TIMEOUT);
+	}
 
         try {
             AppCookie.registerApp(FORWARDING_APP_ID, "Forwarding");
