@@ -40,6 +40,19 @@ public class LLDP extends BasePacket {
         this.ethType = Ethernet.TYPE_LLDP;
     }
 
+    //Extension by DOT
+    /*public LLDP(LLDP anotherLLDP){
+        this.optionalTLVList = new ArrayList<LLDPTLV>(anotherLLDP.optionalTLVList);
+        this.setChassisId(new LLDPTLV().setType(anotherLLDP.chassisId.getType())
+                                       .setLength(anotherLLDP.chassisId.getLength())
+                                       .setValue(anotherLLDP.chassisId.
+                            );
+        this.portId = anotherLLDP.portId;
+        this.ttl = anotherLLDP.ttl;
+              
+    }
+    //END Extension by DOT
+    */
     /**
      * @return the chassisId
      */

@@ -353,7 +353,9 @@ IFloodlightModule, IInfoProvider, IHAListener {
 
         if (lldpClock == 0) {
             log.debug("Sending LLDP out on all ports.");
-            discoverOnAllPorts();
+            
+            //DOT: Disabling link discovery
+            //discoverOnAllPorts();
         }
     }
 
@@ -734,18 +736,96 @@ IFloodlightModule, IInfoProvider, IHAListener {
     }
 
     private Command handleLldp(LLDP lldp, long sw, OFPacketIn pi, boolean isStandard, FloodlightContext cntx) {
+        
         // If LLDP is suppressed on this port, ignore received packet as well
         IOFSwitch iofSwitch = floodlightProvider.getSwitches().get(sw);
         if (iofSwitch == null) {
             return Command.STOP;
         }
-
-        if (isLinkDiscoverySuppressed(sw, pi.getInPort()))
-            return Command.STOP;
-
         // If this is a malformed LLDP, or not from us, exit
         if (lldp.getPortId() == null || lldp.getPortId().getLength() != 3)
             return Command.CONTINUE;
+
+
+        //Start DOT LLDP Flooding to all GATEWAY Switch
+        if (log.isTraceEnabled()) {
+                    log.trace("LLDP messages are transparently being forwarded.");
+        }
+        
+        //Forwarding to all connected gateway switch
+        for (Long gwSwitch : floodlightProvider.getAllSwitchDpids()) {
+            IOFSwitch otherSwitch = floodlightProvider.getSwitch(gwSwitch);
+            if (otherSwitch == null) continue;
+            
+            if (otherSwitch.getEnabledPorts() != null) {
+                 for (ImmutablePort ofp : otherSwitch.getEnabledPorts()) { 
+                 
+                    //Checking whether its the receiving port and not a tunnel end point
+                    if(otherSwitch.getPort(lldp.getPortId()) != ofp) {
+                        
+                        //sending the LLDP Message
+                        if (log.isTraceEnabled()) {
+                            log.trace("LLDP messages are now replicating.");
+                        }
+
+                        //New LLDP messages
+                        LLDP newLldp = new LLDP();
+                        byte[] lldpContent = lldp.serialize();
+                        newLldp.deserialize(lldpContent, 0, lldpContent.length);
+                        
+                        Ethernet ethernet;
+                        
+                        ethernet = new Ethernet().setSourceMACAddress(ofp.getHardwareAddress())
+                                                 .setDestinationMACAddress(LLDP_STANDARD_DST_MAC_STRING)
+                                                 .setEtherType(Ethernet.TYPE_LLDP);
+                        ethernet.setPayload(newLldp);
+                        
+                        // serialize and wrap in a packet out
+                        byte[] data = ethernet.serialize();
+                        OFPacketOut po = (OFPacketOut) floodlightProvider.getOFMessageFactory()
+                                                                         .getMessage(OFType.PACKET_OUT);
+                        po.setBufferId(OFPacketOut.BUFFER_ID_NONE);
+                        po.setInPort(OFPort.OFPP_NONE);
+
+                        // set data and data length
+                        po.setLengthU(OFPacketOut.MINIMUM_LENGTH + data.length);
+                        po.setPacketData(data);
+
+                        List<OFAction> actions = new ArrayList<OFAction>();
+                        actions.add(new OFActionOutput(ofp.toOFPhysicalPort().getPortNumber(), (short) 0));
+
+                        po.setActions(actions);
+                        short  actionLength = 0;
+                        Iterator <OFAction> actionIter = actions.iterator();
+                        
+                        while (actionIter.hasNext()) {
+                            actionLength += actionIter.next().getLength();
+                        }
+                        po.setActionsLength(actionLength);
+
+                        // po already has the minimum length + data length set
+                        // simply add the actions length to this.
+                        po.setLengthU(po.getLengthU() + po.getActionsLength());
+
+                        // send
+                        try {
+                            iofSwitch.write(po, null);
+                            iofSwitch.flush();
+                        } catch (IOException e) {
+                            log.error("Failure sending LLDP out port {} on switch {}",
+                                      new Object[] { port, iofSwitch.getStringId() }, e);
+                        }
+                  }
+            }               
+        }
+    }
+        
+        return Command.STOP;
+        //END
+        /*
+        //Comment out the original code
+        if (isLinkDiscoverySuppressed(sw, pi.getInPort()))
+            return Command.STOP;
 
         long myId = ByteBuffer.wrap(controllerTLV.getValue()).getLong();
         long otherId = 0;
@@ -895,7 +975,9 @@ IFloodlightModule, IInfoProvider, IHAListener {
 
         // Consume this message
         return Command.STOP;
+        */
     }
+}
 
     protected Command handlePacketIn(long sw, OFPacketIn pi,
                                      FloodlightContext cntx) {
