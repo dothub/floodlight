@@ -753,69 +753,68 @@ IFloodlightModule, IInfoProvider, IHAListener {
         }
         
         //Forwarding to all connected gateway switch
-        for (Long gwSwitch : floodlightProvider.getAllSwitchDpids()) {
-            IOFSwitch otherSwitch = floodlightProvider.getSwitch(gwSwitch);
-            if (otherSwitch == null) continue;
+        for (IOFSwitch otherSwitch: floodlightProvider.getSwitches().values()) {           
+            if (otherSwitch == null) 
+            	continue;
             
             if (otherSwitch.getEnabledPorts() != null) {
-                 for (ImmutablePort ofp : otherSwitch.getEnabledPorts()) { 
+                 for (Short portNumber : otherSwitch.getEnabledPortNumbers()) { 
                  
-                    //Checking whether its the receiving port and not a tunnel end point
-                    if(otherSwitch.getPort(lldp.getPortId()) != ofp) {
-                        
-                        //sending the LLDP Message
-                        if (log.isTraceEnabled()) {
-                            log.trace("LLDP messages are now replicating.");
-                        }
+                    //TODO: Checking whether its the receiving port and not a tunnel end point
+                                         
+                    //sending the LLDP Message
+                    if (log.isTraceEnabled()) {
+                        log.trace("LLDP messages are now replicating.");
+                    }
 
-                        //New LLDP messages
-                        LLDP newLldp = new LLDP();
-                        byte[] lldpContent = lldp.serialize();
-                        newLldp.deserialize(lldpContent, 0, lldpContent.length);
-                        
-                        Ethernet ethernet;
-                        
-                        ethernet = new Ethernet().setSourceMACAddress(ofp.getHardwareAddress())
-                                                 .setDestinationMACAddress(LLDP_STANDARD_DST_MAC_STRING)
-                                                 .setEtherType(Ethernet.TYPE_LLDP);
-                        ethernet.setPayload(newLldp);
-                        
-                        // serialize and wrap in a packet out
-                        byte[] data = ethernet.serialize();
-                        OFPacketOut po = (OFPacketOut) floodlightProvider.getOFMessageFactory()
-                                                                         .getMessage(OFType.PACKET_OUT);
-                        po.setBufferId(OFPacketOut.BUFFER_ID_NONE);
-                        po.setInPort(OFPort.OFPP_NONE);
+                    //New LLDP messages
+                    LLDP newLldp = new LLDP();
+                    byte[] lldpContent = lldp.serialize();
+                    newLldp.deserialize(lldpContent, 0, lldpContent.length);
+                    
+                    Ethernet ethernet;
+                    
+                    ethernet = new Ethernet().setSourceMACAddress(otherSwitch.getPort(portNumber).getHardwareAddress())
+                                             .setDestinationMACAddress(LLDP_STANDARD_DST_MAC_STRING)
+                                             .setEtherType(Ethernet.TYPE_LLDP);
+                    ethernet.setPayload(newLldp);
+                    
+                    // serialize and wrap in a packet out
+                    byte[] data = ethernet.serialize();
+                    OFPacketOut po = (OFPacketOut) floodlightProvider.getOFMessageFactory()
+                                                                     .getMessage(OFType.PACKET_OUT);
+                    po.setBufferId(OFPacketOut.BUFFER_ID_NONE);
+                    po.setInPort(OFPort.OFPP_NONE);
 
-                        // set data and data length
-                        po.setLengthU(OFPacketOut.MINIMUM_LENGTH + data.length);
-                        po.setPacketData(data);
+                    // set data and data length
+                    po.setLengthU(OFPacketOut.MINIMUM_LENGTH + data.length);
+                    po.setPacketData(data);
 
-                        List<OFAction> actions = new ArrayList<OFAction>();
-                        actions.add(new OFActionOutput(ofp.toOFPhysicalPort().getPortNumber(), (short) 0));
+                    List<OFAction> actions = new ArrayList<OFAction>();
+                    actions.add(new OFActionOutput(otherSwitch.getPort(portNumber).getPortNumber(), (short) 0));
 
-                        po.setActions(actions);
-                        short  actionLength = 0;
-                        Iterator <OFAction> actionIter = actions.iterator();
-                        
-                        while (actionIter.hasNext()) {
-                            actionLength += actionIter.next().getLength();
-                        }
-                        po.setActionsLength(actionLength);
+                    po.setActions(actions);
+                    short  actionLength = 0;
+                    Iterator <OFAction> actionIter = actions.iterator();
+                    
+                    while (actionIter.hasNext()) {
+                        actionLength += actionIter.next().getLength();
+                    }
+                    po.setActionsLength(actionLength);
 
-                        // po already has the minimum length + data length set
-                        // simply add the actions length to this.
-                        po.setLengthU(po.getLengthU() + po.getActionsLength());
+                    // po already has the minimum length + data length set
+                    // simply add the actions length to this.
+                    po.setLengthU(po.getLengthU() + po.getActionsLength());
 
-                        // send
-                        try {
-                            iofSwitch.write(po, null);
-                            iofSwitch.flush();
-                        } catch (IOException e) {
-                            log.error("Failure sending LLDP out port {} on switch {}",
-                                      new Object[] { port, iofSwitch.getStringId() }, e);
-                        }
-                  }
+                    // send
+                    try {
+                        iofSwitch.write(po, null);
+                        iofSwitch.flush();
+                    } catch (IOException e) {
+                        log.error("Failure sending LLDP out port {} on switch {}",
+                                  new Object[] { port, iofSwitch.getStringId() }, e);
+                    }
+              
             }               
         }
     }
@@ -976,7 +975,7 @@ IFloodlightModule, IInfoProvider, IHAListener {
         // Consume this message
         return Command.STOP;
         */
-    }
+    
 }
 
     protected Command handlePacketIn(long sw, OFPacketIn pi,
