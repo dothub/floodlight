@@ -4,15 +4,24 @@ import java.io.BufferedReader;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.StringTokenizer;
 import java.util.Vector;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 import org.openflow.protocol.OFMessage;
+import org.openflow.protocol.OFPacketIn;
+import org.openflow.protocol.OFPacketOut;
+import org.openflow.protocol.OFPhysicalPort;
+import org.openflow.protocol.OFPort;
 import org.openflow.protocol.OFType;
+import org.openflow.protocol.action.OFAction;
+import org.openflow.protocol.action.OFActionOutput;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -26,6 +35,8 @@ import net.floodlightcontroller.core.module.IFloodlightModule;
 import net.floodlightcontroller.core.module.IFloodlightService;
 import net.floodlightcontroller.devicemanager.IDevice;
 import net.floodlightcontroller.devicemanager.IDeviceListener;
+import net.floodlightcontroller.packet.Ethernet;
+import net.floodlightcontroller.packet.LLDP;
 
 public class LLDPForwarder implements IDeviceListener, IOFMessageListener,
 		IFloodlightModule {
@@ -104,12 +115,84 @@ public class LLDPForwarder implements IDeviceListener, IOFMessageListener,
 	@Override
 	public net.floodlightcontroller.core.IListener.Command receive(
 			IOFSwitch sw, OFMessage msg, FloodlightContext cntx) {
-		// TODO Auto-generated method stub
+		
 		log.info("Receive a Packet In");
+		switch (msg.getType()) {
+		
+			case PACKET_IN:
+				return this.handlePacketIn(sw.getId(), (OFPacketIn) msg,
+                                   cntx);
+			default:
+				break;
+		}
+		
+		return Command.CONTINUE;
+	}
+	private Command handlePacketIn(			
+			
+			long sw, OFPacketIn pi, FloodlightContext cntx) {
+		log.info("Packet In");
+		Ethernet eth = IFloodlightProviderService.bcStore.get(cntx,
+                IFloodlightProviderService.CONTEXT_PI_PAYLOAD);
+		
+		if (eth.getPayload() instanceof LLDP) {
+            return handleLldpForward(eth, sw, pi.getInPort(), true, cntx);
+        }
 		
 		return Command.CONTINUE;
 	}
 
+	private Command handleLldpForward(
+			Ethernet eth, long sw, short inPort,
+            boolean isStandard, FloodlightContext cntx) {
+		log.info("In Handle LLDP)");
+	    
+		log.info("LLDP Received from switch: "+ sw + ", port: "+ inPort);
+		
+		// serialize and wrap in a packet out
+        byte[] data = eth.serialize();
+        OFPacketOut po = (OFPacketOut) floodlightProvider.getOFMessageFactory()
+                                                         .getMessage(OFType.PACKET_OUT);
+        po.setBufferId(OFPacketOut.BUFFER_ID_NONE);
+        po.setInPort(OFPort.OFPP_NONE);
+
+        // set data and data length
+        po.setLengthU(OFPacketOut.MINIMUM_LENGTH + data.length);
+        po.setPacketData(data);
+        
+        
+        //TODO: retrieve adjSwitch and adjPort
+        long adjSwitch = 0;
+        short adjPort = 0;
+        
+        IOFSwitch iofSwitch = floodlightProvider.getSwitches().get(adjSwitch);
+        OFPhysicalPort ofpPort = iofSwitch.getPort(adjPort);
+        
+        List<OFAction> actions = new ArrayList<OFAction>();
+        actions.add(new OFActionOutput(ofpPort.getPortNumber(), (short) 0));
+        
+        po.setActions(actions);
+        short  actionLength = 0;
+        Iterator <OFAction> actionIter = actions.iterator();
+        while (actionIter.hasNext()) {
+            actionLength += actionIter.next().getLength();
+        }
+        po.setActionsLength(actionLength);
+        
+        // po already has the minimum length + data length set
+        // simply add the actions length to this.
+        po.setLengthU(po.getLengthU() + po.getActionsLength());
+
+        // send
+        try {
+            iofSwitch.write(po, null);
+            iofSwitch.flush();
+        } catch (IOException e) {
+            log.error("Failure sending LLDP forwarding");
+        }
+		
+		return Command.STOP;
+	}
 	@Override
 	public void deviceAdded(IDevice device) {
 		// TODO Auto-generated method stub
