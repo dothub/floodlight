@@ -161,9 +161,14 @@ public class LLDPForwarder implements IDeviceListener, IOFMessageListener,
         po.setPacketData(data);
         
         
-        //TODO: retrieve adjSwitch and adjPort
-        long adjSwitch = 0;
-        short adjPort = 0;
+        //retrieve adjSwitch and adjPort
+        this.topologyLock.readLock().lock();
+        long adjSwitch 
+        	= Long.parseLong((this.topology.get(Long.toString(sw)).get(Short.toString(inPort))
+        			.elementAt(0)));
+        short adjPort = Short.parseShort((this.topology.get(Long.toString(sw)).get(Short.toString(inPort))
+    			.elementAt(1)));
+        this.topologyLock.readLock().unlock();
         
         IOFSwitch iofSwitch = floodlightProvider.getSwitches().get(adjSwitch);
         OFPhysicalPort ofpPort = iofSwitch.getPort(adjPort);
