@@ -189,6 +189,12 @@ IFloodlightModule, IInfoProvider, IHAListener {
     protected ReentrantReadWriteLock lock;
     int lldpTimeCount = 0;
 
+    //DOT: Added
+    /*
+     * This enables whether floodlight needs to send the discovery or not
+     */
+    private boolean discoveryEnabled = true;
+    
     /**
      * Flag to indicate if automatic port fast is enabled or not.
      * Default is set to false -- Initialized in the init method as well.
@@ -1805,9 +1811,22 @@ IFloodlightModule, IInfoProvider, IHAListener {
                 new EventHistory<EventHistoryTopologyLink>("Topology: Link");
         this.evHistTopologyCluster =
                 new EventHistory<EventHistoryTopologyCluster>("Topology: Cluster");
+        
+        this.loadParameters(context);
     }
 
-    @Override
+    private void loadParameters(FloodlightModuleContext context) {
+    	// read our config options
+		Map<String, String> configOptions = context.getConfigParams(this);
+		
+		if(configOptions.get("discoveryEnabled") != null)
+			this.discoveryEnabled = Boolean.parseBoolean(configOptions.get("discoveryEnabled"));
+		
+		log.info("Discovery enabled " + this.discoveryEnabled);
+		
+	}
+
+	@Override
     @LogMessageDocs({
         @LogMessageDoc(level="ERROR",
                 message="No storage source found.",
@@ -1883,7 +1902,8 @@ IFloodlightModule, IInfoProvider, IHAListener {
         Role role = floodlightProvider.getRole();
         if (role == null || role == Role.MASTER) {
             log.trace("Setup: Rescheduling discovery task. role = {}", role);
-            discoveryTask.reschedule(DISCOVERY_TASK_INTERVAL, TimeUnit.SECONDS);
+            if(this.discoveryEnabled == true)
+            	discoveryTask.reschedule(DISCOVERY_TASK_INTERVAL, TimeUnit.SECONDS);
         } else {
                 log.trace("Setup: Not scheduling LLDP as role = {}.", role);
         }
@@ -2025,7 +2045,8 @@ IFloodlightModule, IInfoProvider, IHAListener {
                     }
                     clearAllLinks();
                     log.debug("Role Change to Master: Rescheduling discovery task.");
-                    discoveryTask.reschedule(1, TimeUnit.MICROSECONDS);
+                    if(this.discoveryEnabled == true)
+                    	discoveryTask.reschedule(1, TimeUnit.MICROSECONDS);
                 }
                 break;
             case SLAVE:

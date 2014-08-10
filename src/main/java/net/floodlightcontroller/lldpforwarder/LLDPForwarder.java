@@ -33,12 +33,10 @@ import net.floodlightcontroller.core.module.FloodlightModuleContext;
 import net.floodlightcontroller.core.module.FloodlightModuleException;
 import net.floodlightcontroller.core.module.IFloodlightModule;
 import net.floodlightcontroller.core.module.IFloodlightService;
-import net.floodlightcontroller.devicemanager.IDevice;
-import net.floodlightcontroller.devicemanager.IDeviceListener;
 import net.floodlightcontroller.packet.Ethernet;
 import net.floodlightcontroller.packet.LLDP;
 
-public class LLDPForwarder implements IDeviceListener, IOFMessageListener,
+public class LLDPForwarder implements IOFMessageListener,
 		IFloodlightModule {
 
 
@@ -47,8 +45,8 @@ public class LLDPForwarder implements IDeviceListener, IOFMessageListener,
 	public static final String MODULE_NAME = "LLDPforwarder";
 	protected IFloodlightProviderService floodlightProvider;
 	
-	protected String cutEdgesFileName;
-    protected long cutEdgeReadTimer; //sec
+	protected String topologyFileName;
+    protected long readFrequency; //sec
   
    
     private Thread refreshTopologyThread;
@@ -58,13 +56,13 @@ public class LLDPForwarder implements IDeviceListener, IOFMessageListener,
     
 	@Override
 	public String getName() {
-		// TODO Auto-generated method stub
-		return this.MODULE_NAME;
+		
+		return LLDPForwarder.MODULE_NAME;
 	}
 
 	@Override
 	public boolean isCallbackOrderingPrereq(OFType type, String name) {
-		// TODO Auto-generated method stub
+		
 		return false;
 	}
 
@@ -77,19 +75,19 @@ public class LLDPForwarder implements IDeviceListener, IOFMessageListener,
 
 	@Override
 	public Collection<Class<? extends IFloodlightService>> getModuleServices() {
-		// TODO Auto-generated method stub
+
 		return null;
 	}
 
 	@Override
 	public Map<Class<? extends IFloodlightService>, IFloodlightService> getServiceImpls() {
-		// TODO Auto-generated method stub
+		
 		return null;
 	}
 
 	@Override
 	public Collection<Class<? extends IFloodlightService>> getModuleDependencies() {
-		// TODO Auto-generated method stub
+		
 		return null;
 	}
 
@@ -102,8 +100,10 @@ public class LLDPForwarder implements IDeviceListener, IOFMessageListener,
 		this.topologyLock = new ReentrantReadWriteLock();
 		this.topology = new HashMap<String, HashMap<String, Vector<String> >>();
 		
-		this.setParameters(context);
-		this.loadTopology();
+		this.loadParameters(context);
+		
+		if(this.topologyFileName != null)
+			this.loadTopology();
 
 	}
 
@@ -198,56 +198,28 @@ public class LLDPForwarder implements IDeviceListener, IOFMessageListener,
 		
 		return Command.STOP;
 	}
-	@Override
-	public void deviceAdded(IDevice device) {
-		// TODO Auto-generated method stub
-
-	}
-
-	@Override
-	public void deviceRemoved(IDevice device) {
-		// TODO Auto-generated method stub
-
-	}
-
-	@Override
-	public void deviceMoved(IDevice device) {
-		// TODO Auto-generated method stub
-
-	}
-
-	@Override
-	public void deviceIPV4AddrChanged(IDevice device) {
-		// TODO Auto-generated method stub
-
-	}
-
-	@Override
-	public void deviceVlanChanged(IDevice device) {
-		// TODO Auto-generated method stub
-
-	}
+	
 	
 	//Added Methods
-	private void setParameters(FloodlightModuleContext context) 
+	private void loadParameters(FloodlightModuleContext context) 
 	{
 		// read our config options
 		Map<String, String> configOptions = context.getConfigParams(this);
 		
-        this.cutEdgesFileName = configOptions.get("cutEdgesFileName");
-        if(this.cutEdgesFileName == null)
+        this.topologyFileName = configOptions.get("topologyFileName");
+        if(this.topologyFileName == null)
         	log.error("File Name for Cut Edges is not configured");
         
-        log.info("The cutedges file name is set to: " + this.cutEdgesFileName);
-        String timer = configOptions.get("readTimer");
+        log.info("The cutedges file name is set to: " + this.topologyFileName);
+        String timer = configOptions.get("readFrequency");
         if(timer == null)
         {
-        	this.cutEdgeReadTimer = 5; //sec
+        	this.readFrequency = 5; //sec
         }
         else
-        	this.cutEdgeReadTimer = Long.parseLong(timer);
+        	this.readFrequency = Long.parseLong(timer);
         
-        log.info("The cutedges read timer is set to: " + this.cutEdgeReadTimer);
+        log.info("The cutedges read timer is set to: " + this.readFrequency);
 	}
 	
 	private void loadTopology() {
@@ -260,7 +232,7 @@ public class LLDPForwarder implements IDeviceListener, IOFMessageListener,
                     try {
                         refreshTopology();
                         
-                        Thread.sleep(cutEdgeReadTimer*1000);
+                        Thread.sleep(readFrequency*1000);
                     } catch (InterruptedException e) {
                         return;
                     }
@@ -277,7 +249,7 @@ public class LLDPForwarder implements IDeviceListener, IOFMessageListener,
 		
 		 try {
 			 log.info("Refreshing topology");
-	    	 String fileNameWithPath = System.getProperty("user.dir")+"/dot/"+this.cutEdgesFileName;
+	    	 String fileNameWithPath = System.getProperty("user.dir")+"/dot/"+this.topologyFileName;
 	    	 BufferedReader file = new BufferedReader(new FileReader(fileNameWithPath));
 	       
 			 try {
