@@ -325,12 +325,15 @@ public class LLDPForwarder implements IOFMessageListener,
 						
 					}
 					
+					file.close();
+					
 				} catch (IOException e) {
 					
 					log.error("Failed to read data from topology file", e);
 			}
 			 finally {
 				
+				 
 				 log.debug("Topology: ");
 				 for (Map.Entry<String, HashMap<String, Vector<String>>> entry : this.topology.entrySet()) {
 					    
