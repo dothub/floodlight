@@ -1821,11 +1821,14 @@ IFloodlightModule, IInfoProvider, IHAListener {
 		
 		if(configOptions.get("discoveryEnabled") != null)
 		{
-			log.info("Read Discovery value: "+ configOptions.get("discoveryEnabled"));
+			log.debug("Read Discovery value: "+ configOptions.get("discoveryEnabled"));
 			this.discoveryEnabled = Boolean.parseBoolean(configOptions.get("discoveryEnabled"));
 		}
 		
-		log.info("Discovery enabled " + this.discoveryEnabled);
+		if(this.discoveryEnabled)
+			log.info("Link layer discovery enabled");
+		else 
+			log.info("Link layer discovery is disabled");
 		
 	}
 

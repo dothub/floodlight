@@ -12,6 +12,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.StringTokenizer;
 import java.util.Vector;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 import org.openflow.protocol.OFMessage;
@@ -33,8 +35,10 @@ import net.floodlightcontroller.core.module.FloodlightModuleContext;
 import net.floodlightcontroller.core.module.FloodlightModuleException;
 import net.floodlightcontroller.core.module.IFloodlightModule;
 import net.floodlightcontroller.core.module.IFloodlightService;
+import net.floodlightcontroller.core.util.SingletonTask;
 import net.floodlightcontroller.packet.Ethernet;
 import net.floodlightcontroller.packet.LLDP;
+import net.floodlightcontroller.threadpool.IThreadPoolService;
 
 public class LLDPForwarder implements IOFMessageListener,
 		IFloodlightModule {
@@ -44,12 +48,14 @@ public class LLDPForwarder implements IOFMessageListener,
 	
 	public static final String MODULE_NAME = "LLDPforwarder";
 	protected IFloodlightProviderService floodlightProvider;
+	protected IThreadPoolService threadPool;
 	
 	protected String topologyFileName;
     protected long readFrequency; //sec
   
    
-    private Thread refreshTopologyThread;
+    private SingletonTask refreshTopologyThread;
+    
     private Map<String, HashMap<String, Vector<String>> > topology;
     protected ReentrantReadWriteLock topologyLock;
     
@@ -88,7 +94,11 @@ public class LLDPForwarder implements IOFMessageListener,
 	@Override
 	public Collection<Class<? extends IFloodlightService>> getModuleDependencies() {
 		
-		return null;
+		Collection<Class<? extends IFloodlightService>> l = 
+                new ArrayList<Class<? extends IFloodlightService>>();
+		l.add(IThreadPoolService.class);
+		
+		return l;
 	}
 
 	@Override
@@ -96,6 +106,7 @@ public class LLDPForwarder implements IOFMessageListener,
 			throws FloodlightModuleException {
 		
 		floodlightProvider = context.getServiceImpl(IFloodlightProviderService.class);
+		threadPool = context.getServiceImpl(IThreadPoolService.class);
 		
 		this.topologyLock = new ReentrantReadWriteLock();
 		this.topology = new HashMap<String, HashMap<String, Vector<String> >>();
@@ -224,24 +235,30 @@ public class LLDPForwarder implements IOFMessageListener,
 	
 	private void loadTopology() {
 		
-		refreshTopologyThread = new Thread(new Runnable() {
+		ScheduledExecutorService ses = threadPool.getScheduledExecutor();
+		
+		refreshTopologyThread = new SingletonTask(ses, new Runnable() {
             @Override
             public void run() {
             	log.info("Reading thread again started");
                 while (true) {
                     try {
                         refreshTopology();
-                        
-                        Thread.sleep(readFrequency*1000);
-                    } catch (InterruptedException e) {
-                        return;
+                    } 
+                    
+                    catch (Exception e) {
+                    	log.error("Exception in refreshing the topology");
+                    }
+                    finally {
+                    	//Again scheduling
+                    	refreshTopologyThread.reschedule(readFrequency, TimeUnit.SECONDS);
                     }
                 }
             }
-
 		
-        }, "Gateway Adjacency Update");
-		refreshTopologyThread.start();
+        });
+		
+		refreshTopologyThread.reschedule(readFrequency, TimeUnit.SECONDS);
 		
 	}
 	
