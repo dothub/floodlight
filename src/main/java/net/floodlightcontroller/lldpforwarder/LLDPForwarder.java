@@ -221,7 +221,7 @@ public class LLDPForwarder implements IOFMessageListener,
         if(this.topologyFileName == null)
         	log.error("File Name for Cut Edges is not configured");
         
-        log.info("The cutedges file name is set to: " + this.topologyFileName);
+        log.info("The topology file name is set to: " + this.topologyFileName);
         String timer = configOptions.get("readFrequency");
         if(timer == null)
         {
@@ -230,7 +230,7 @@ public class LLDPForwarder implements IOFMessageListener,
         else
         	this.readFrequency = Long.parseLong(timer);
         
-        log.info("The cutedges read timer is set to: " + this.readFrequency);
+        log.info("The topology read timer is set to: " + this.readFrequency);
 	}
 	
 	private void loadTopology() {
