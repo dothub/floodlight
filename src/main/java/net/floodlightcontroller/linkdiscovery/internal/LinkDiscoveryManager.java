@@ -1820,7 +1820,10 @@ IFloodlightModule, IInfoProvider, IHAListener {
 		Map<String, String> configOptions = context.getConfigParams(this);
 		
 		if(configOptions.get("discoveryEnabled") != null)
+		{
+			log.info("Read Discovery value: "+ configOptions.get("discoveryEnabled"));
 			this.discoveryEnabled = Boolean.parseBoolean(configOptions.get("discoveryEnabled"));
+		}
 		
 		log.info("Discovery enabled " + this.discoveryEnabled);
 		
